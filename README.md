@@ -354,6 +354,16 @@ curl http://localhost:8000/v1/responses \
 </details>
 
 
+## 生图报错排查
+
+升级到 1.9.3 或更新版本后，可在后台日志详情查看上游返回的完整错误原因（展示内容有长度限制）。
+
+- `Unusual activity has been detected from your device`：上游拒绝了当前设备或账号请求。先停止重复提交，并在 ChatGPT 官网确认账号能否正常生图、完成官方要求的验证；升级服务代码无法解除此限制。
+- `Model not found`：核对设置中的上游模型名称与该账号当前返回的模型 `slug`。显示名称、API 模型名和网页模型 `slug` 可能不同，不要仅根据显示名称填写。
+- 原版 `/backend-api/f/conversation` 的 404 会兼容重试 `/backend-api/conversation`，应以最终请求的错误为准。
+
+Docker 用户可拉取 `ghcr.io/zuelu/chatgpt2api-maintained:1.9.3` 或 `latest`，随后执行 `docker compose up -d`。升级前备份配置和数据目录；已有失败任务不会因升级自动重新生成。
+
 ## Contributors
 
 感谢所有为本项目做出贡献的开发者：

@@ -4,13 +4,36 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - main
+    paths:
+      - VERSION
   workflow_dispatch:
 
 env:
   IMAGE_NAME: chatgpt2api-maintained
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Run image and upstream error regressions
+        env:
+          STORAGE_BACKEND: json
+          CHATGPT2API_AUTH_KEY: test-auth
+        run: |
+          python -m pip install uv
+          uv sync --frozen
+          uv run python -m unittest test.test_upstream_http_errors test.test_image_download_retry test.test_conversation_continuation test.test_image_model_25
+
   docker:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,6 +42,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read release version
+        id: version
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            [[ "$GITHUB_REF_NAME" == "v$version" ]]
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -41,7 +75,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
+            type=raw,value=${{ steps.version.outputs.value }}
             type=ref,event=tag
             type=sha
             type=semver,pattern={{version}}
@@ -59,3 +94,29 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    if: github.event_name == 'push'
+    needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish release after images are available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          python3 - "$version" <<'PY'
+          import pathlib, sys
+          version = sys.argv[1]
+          changelog = pathlib.Path('CHANGELOG.md').read_text()
+          block = next(block for block in changelog.split('\n## ') if block.startswith(version + ' - '))
+          pathlib.Path('release-notes.txt').write_text(block.split('\n', 1)[1].strip() + '\n')
+          PY
+          if ! gh release view "v$version" >/dev/null 2>&1; then
+            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file release-notes.txt
+          fi

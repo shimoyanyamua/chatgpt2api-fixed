@@ -143,6 +143,7 @@ def is_image_chat_request(body: dict[str, object]) -> bool:
 
 
 _UPSTREAM_BODY_LOG_LIMIT = 500
+_UPSTREAM_ERROR_BODY_LIMIT = 64 * 1024
 
 
 class UpstreamHTTPError(RuntimeError):
@@ -180,11 +181,31 @@ class UpstreamHTTPError(RuntimeError):
 def ensure_ok(response: requests.Response, context: str) -> None:
     if 200 <= response.status_code < 300:
         return
-    body: Any = response.text
-    try:
-        body = response.json()
-    except Exception:
-        pass
+    # curl_cffi leaves content/text empty for stream=True responses. Read the
+    # error stream before closing it, otherwise upstream 403/429 details vanish.
+    if getattr(response, "queue", None) is not None:
+        raw = bytearray()
+        try:
+            for chunk in response.iter_content():
+                raw.extend(chunk[:_UPSTREAM_ERROR_BODY_LIMIT - len(raw)])
+                if len(raw) >= _UPSTREAM_ERROR_BODY_LIMIT:
+                    break
+        except Exception as exc:
+            if not raw:
+                raw.extend(f"Unable to read upstream error body ({type(exc).__name__})".encode())
+        finally:
+            response.close()
+        body: Any = raw.decode("utf-8", errors="replace")
+        try:
+            body = json.loads(body)
+        except (TypeError, ValueError):
+            pass
+    else:
+        body = response.text
+        try:
+            body = response.json()
+        except Exception:
+            pass
     retry_after_header = response.headers.get("Retry-After") if hasattr(response, "headers") else None
     retry_after: int | None = None
     if retry_after_header is not None:
