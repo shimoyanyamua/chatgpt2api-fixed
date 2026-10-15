@@ -29,6 +29,7 @@ def reset_locale(token: Token[str]) -> None:
 
 MESSAGES: dict[str, dict[str, str]] = {
     "zh": {
+        "upstream.verification_required": "上游要求完成交互式浏览器验证，当前网页通道暂不可用。请求尚未提交生成；重新登录账号不代表已完成此次验证。",
         "identity.admin_name": "管理员",
         "auth.default_key_name_admin": "管理员密钥",
         "auth.default_key_name_user": "普通用户",
@@ -74,6 +75,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "oauth.access_token_empty": "OpenAI 返回的 access_token 为空",
     },
     "en": {
+        "upstream.verification_required": "The web upstream requires interactive browser verification. This web channel is temporarily unavailable and generation was not submitted. Signing in again does not complete this verification.",
         "identity.admin_name": "Admin",
         "auth.default_key_name_admin": "Admin key",
         "auth.default_key_name_user": "Regular user",
@@ -119,6 +121,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "oauth.access_token_empty": "OpenAI returned an empty access_token",
     },
     "vi": {
+        "upstream.verification_required": "Dịch vụ web yêu cầu xác minh tương tác trong trình duyệt. Kênh web tạm thời không khả dụng và yêu cầu tạo ảnh chưa được gửi. Đăng nhập lại không hoàn tất bước xác minh này.",
         "identity.admin_name": "Quản trị viên",
         "auth.default_key_name_admin": "Khóa quản trị viên",
         "auth.default_key_name_user": "Người dùng thường",

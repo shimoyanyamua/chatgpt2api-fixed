@@ -25,12 +25,26 @@ from services.config import config
 from services.proxy_service import proxy_settings
 from utils.helper import UpstreamHTTPError, ensure_ok, iter_sse_payloads, new_uuid, split_image_model
 from utils.log import logger
+from utils.i18n import t
 from utils.pow import build_legacy_requirements_token, build_proof_token, parse_pow_resources
-from utils.turnstile import solve_turnstile_token
 
 
 class InvalidAccessTokenError(RuntimeError):
     pass
+
+
+class UpstreamVerificationRequiredError(RuntimeError):
+    """The web upstream requires interactive verification we cannot supply."""
+
+    status_code = 503
+    code = "upstream_verification_required"
+
+    def __init__(self, challenges: list[str]) -> None:
+        self.challenges = tuple(challenges)
+        super().__init__(t("upstream.verification_required"))
+
+    def to_openai_error(self) -> dict[str, Any]:
+        return {"error": {"message": str(self), "type": "server_error", "param": None, "code": self.code}}
 
 
 class BillingAPIError(RuntimeError):
@@ -574,8 +588,7 @@ class OpenAIBackendAPI:
 
     def _build_requirements(self, data: Dict[str, Any], source_p: str = "") -> ChatRequirements:
         """把 sentinel 响应整理成后续对话需要的 token 集合。"""
-        if (data.get("arkose") or {}).get("required"):
-            raise RuntimeError("chat requirements requires arkose token, which is not implemented")
+        self._check_interactive_requirements(data)
 
         proof_token = ""
         proof_info = data.get("proofofwork") or {}
@@ -588,18 +601,24 @@ class OpenAIBackendAPI:
                 data_build=self.pow_data_build,
             )
 
-        turnstile_token = ""
-        turnstile_info = data.get("turnstile") or {}
-        if turnstile_info.get("required") and turnstile_info.get("dx"):
-            turnstile_token = solve_turnstile_token(turnstile_info["dx"], source_p) or ""
-
         return ChatRequirements(
             token=data.get("token", ""),
             proof_token=proof_token,
-            turnstile_token=turnstile_token,
             so_token=data.get("so_token", ""),
             raw_finalize=data,
         )
+
+    @staticmethod
+    def _check_interactive_requirements(data: Dict[str, Any]) -> None:
+        challenges = [
+            name for name in ("arkose", "turnstile", "so")
+            if isinstance(data.get(name), dict) and data[name].get("required")
+        ]
+        if challenges:
+            # A 200 from finalize is not evidence that these checks passed.
+            # Never submit an empty verification token and then attempt generation.
+            logger.warning({"event": "upstream_verification_required", "challenges": challenges})
+            raise UpstreamVerificationRequiredError(challenges)
 
     def _conversation_headers(self, path: str, requirements: ChatRequirements) -> Dict[str, str]:
         """根据当前 requirements 构造对话 SSE 请求头。"""
@@ -2894,12 +2913,12 @@ class OpenAIBackendAPI:
     ) -> Iterator[str]:
         if not self.access_token:
             raise RuntimeError("access_token is required for image endpoints")
-        self._report_progress("uploading")
-        references = [self._upload_image(image, f"image_{idx}.png") for idx, image in enumerate(images, start=1)]
         self._report_progress("bootstrapping")
         self._bootstrap()
         self._report_progress("getting_token")
         requirements = self._get_chat_requirements()
+        self._report_progress("uploading")
+        references = [self._upload_image(image, f"image_{idx}.png") for idx, image in enumerate(images, start=1)]
         self._report_progress("preparing_conversation")
         conduit_token = self._prepare_image_conversation(
             prompt,
@@ -2967,8 +2986,7 @@ class OpenAIBackendAPI:
         ensure_ok(response, "chat_requirements_prepare")
         prepare_data = response.json()
 
-        if (prepare_data.get("arkose") or {}).get("required"):
-            raise RuntimeError("chat requirements requires arkose token, which is not implemented")
+        self._check_interactive_requirements(prepare_data)
 
         proof_token = ""
         proof_info = prepare_data.get("proofofwork") or {}
@@ -2981,11 +2999,6 @@ class OpenAIBackendAPI:
                 data_build=self.pow_data_build,
             )
 
-        turnstile_token = ""
-        turnstile_info = prepare_data.get("turnstile") or {}
-        if turnstile_info.get("required") and turnstile_info.get("dx"):
-            turnstile_token = solve_turnstile_token(turnstile_info["dx"], p_token) or ""
-
         finalize_path = base + "/finalize"
         response = self.session.post(
             self.base_url + finalize_path,
@@ -2993,7 +3006,7 @@ class OpenAIBackendAPI:
             json={
                 "prepare_token": prepare_data.get("prepare_token", ""),
                 "proof_token": proof_token,
-                "turnstile_token": turnstile_token,
+                "turnstile_token": "",
             },
             timeout=30,
         )
@@ -3008,7 +3021,6 @@ class OpenAIBackendAPI:
         return ChatRequirements(
             token=token,
             proof_token=proof_token,
-            turnstile_token=turnstile_token,
             so_token=data.get("so_token", ""),
             raw_finalize=data,
         )
