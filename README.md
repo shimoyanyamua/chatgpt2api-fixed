@@ -80,9 +80,8 @@ bun run dev
 后续更新新版本：
 
 ```bash
-docker pull ghcr.io/zuelu/chatgpt2api-maintained:latest
-docker-compose down
-docker-compose up -d
+docker compose pull
+docker compose up -d
 
 ```
 
@@ -118,9 +117,10 @@ environment:
 - 支持生成可编辑 PSD 文件
 - 支持 Codex 中的画图接口逆向，仅 `Plus` / `Team` / `Pro` 订阅可用，模型别名为 `codex-gpt-image-2`，如有需要可自行在其他场景映射回
   `gpt-image-2`，用于和官网画图区分；也就意味着同一账号会同时有官网和 Codex 两份生图额度
-- 支持 ChatGPT Images 2.5：官网画图链路的别名为 `gpt-image-2.5`（也是默认生图模型；上游模型名可在设置页单独配置，留空跟随旧版设置）；
+- 支持 ChatGPT Images 2.5：官网画图链路的别名为 `gpt-image-2.5`（API 省略模型时仍使用该默认值；上游模型名可在设置页单独配置，留空跟随旧版设置）；
   Codex 链路的别名为 `codex-gpt-image-2.5`（同样支持 `plus` / `team` / `pro` 前缀），工具模型默认 `gpt-image-2.5-sunburst`、
   可在设置页切换为 `gpt-image-2.5-flare`，质量档额外支持 `xhigh` / `max`
+- Web 工作台默认选择 `codex-gpt-image-2.5`；需要导入 Codex 来源的 `Plus` / `Team` / `Pro` 账号，并具有 `gpt-6.1-sol` 和图片工具的使用权限。账号池未提供该模型时，工作台按当前可用模型列表选择。此默认值不会改写历史会话或 API 显式指定的模型。
 
 ### 在线画图功能
 
@@ -363,7 +363,9 @@ curl http://localhost:8000/v1/responses \
 - `Model not found`：核对设置中的上游模型名称与该账号当前返回的模型 `slug`。显示名称、API 模型名和网页模型 `slug` 可能不同，不要仅根据显示名称填写。
 - 原版 `/backend-api/f/conversation` 的 404 会兼容重试 `/backend-api/conversation`，应以最终请求的错误为准。
 
-Docker 用户可拉取 `ghcr.io/zuelu/chatgpt2api-maintained:1.9.4` 或 `latest`，随后执行 `docker compose up -d`。升级前备份配置和数据目录；已有失败任务不会因升级自动重新生成。
+Docker 用户可将 compose 中的镜像设为 `ghcr.io/zuelu/chatgpt2api-maintained:1.9.5`，或继续跟随 `latest`，随后执行 `docker compose pull` 和 `docker compose up -d`。升级前备份配置和数据目录；已有失败任务不会因升级自动重新生成。
+
+1.9.5 修复了 Codex 生图仍使用已退役主模型 `gpt-5.5` 的兼容问题，改用 `gpt-6.1-sol`。该版本的工作台默认模型为 `codex-gpt-image-2.5`；通过 API 使用该通道时，请显式传入同名模型。原网页通道的交互验证限制仍然存在。
 
 ## Contributors
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import unittest
 from unittest import mock
@@ -96,6 +97,38 @@ class CodexImageToolModelTests(unittest.TestCase):
             self.assertEqual(codex_image_tool_model("codex-gpt-image-2"), "gpt-image-2")
             self.assertEqual(codex_image_tool_model("gpt-image-2.5"), "gpt-image-2")
             self.assertEqual(codex_image_tool_model("gpt-image-2"), "gpt-image-2")
+
+
+class CodexImageRequestTests(unittest.TestCase):
+    def test_image_requests_use_supported_main_model_and_preserve_tool_action(self) -> None:
+        backend = OpenAIBackendAPI.__new__(OpenAIBackendAPI)
+        backend.access_token = "test-token"
+        backend.base_url = "https://chatgpt.com"
+        event = {"type": "response.completed"}
+
+        for images, action in (([], "generate"), (["data:image/png;base64,dGVzdA=="], "edit")):
+            with self.subTest(action=action), mock.patch.object(
+                openai_backend_api.account_service, "get_account", return_value={"source_type": "codex"}
+            ), mock.patch.object(
+                openai_backend_api.account_service, "_decode_jwt_payload", return_value={}
+            ), mock.patch.object(
+                openai_backend_api.urllib.request, "urlopen"
+            ) as urlopen, mock.patch.object(
+                backend, "_iter_codex_response_events", return_value=iter([event])
+            ):
+                self.assertEqual(
+                    list(backend.iter_codex_image_response_events("test image", images=images)),
+                    [event],
+                )
+                urlopen.assert_called_once()
+                request = urlopen.call_args.args[0]
+                payload = json.loads(request.data)
+                self.assertEqual(request.full_url, "https://chatgpt.com/backend-api/codex/responses")
+                self.assertEqual(payload["model"], "gpt-6.1-sol")
+                self.assertEqual(payload["tools"][0]["model"], "gpt-image-2.5-sunburst")
+                self.assertEqual(payload["tools"][0]["action"], action)
+                self.assertEqual(payload["tool_choice"], {"type": "image_generation"})
+                self.assertFalse(payload["store"])
 
 
 class ImageModel25HelperTests(unittest.TestCase):

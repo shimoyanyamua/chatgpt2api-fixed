@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.9.5 - 2026-10-23
+
++ [修复] Codex 生图请求的主模型由已退役的 `gpt-5.5` 更新为 `gpt-6.1-sol`，修复 ChatGPT 账号返回主模型不受支持的问题。
++ [调整] Web 工作台默认生图模型改为 `codex-gpt-image-2.5`，模型列表加载失败时也保持该默认值；未提供 Codex 模型的账号池仍按可用模型列表选择。
++ [测试] 增加 Codex 图片请求构造回归验证，覆盖主模型、图片工具模型及生成和编辑动作。
++ [升级] 发布 `ghcr.io/zuelu/chatgpt2api-maintained:1.9.5` 和 `latest`，提供 amd64 / arm64 镜像；已有数据和历史会话无需迁移。
++ [说明] Codex 生图需要已导入的 Codex 来源账号及对应模型权限。OpenAI 兼容 API 省略模型时的默认值仍为 `gpt-image-2.5`，使用 Codex 通道请显式传入 `codex-gpt-image-2.5`。原网页通道的交互式验证限制仍然存在，本版本不自动切换或重试已有失败任务。
+
 ## 1.9.4 - 2026-10-15
 
 + [修复] 上游要求 Turnstile、浏览器环境或 Arkose 交互式验证时，在预检阶段明确返回 `upstream_verification_required`，不再携带空验证结果继续提交生成请求。
