@@ -7,6 +7,10 @@
 
 <p align="center">ChatGPT2API 主要是对 ChatGPT 官网相关能力进行逆向整理与封装，提供面向 ChatGPT 图片生成、图片编辑、多图组图编辑场景的 OpenAI 兼容图片 API / 代理，并集成在线画图、号池管理、多种账号导入方式与 Docker 自托管部署能力。</p>
 
+## DSH 客户端插件
+
+如果你在 DeepSeek Harness（DSH）里用这个服务生图，配套的客户端插件见 [shimoyanyamua/dsh-chatgpt2api-image](https://github.com/shimoyanyamua/dsh-chatgpt2api-image)：把自托管的 chatgpt2api 接成 DSH 的 `generate_image` 工具，带设置页与图片卡片。插件本身不含任何默认端点与密钥，使用时填你自己的服务地址（带 `/v1`）与 auth-key。
+
 > [!WARNING]
 > 免责声明：
 >
