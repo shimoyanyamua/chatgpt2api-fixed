@@ -14,10 +14,7 @@ import tiktoken
 from services.account_service import account_service
 from services.config import config
 from services.image_storage_service import image_storage_service
-from services.openai_backend_api import (
-    ImageContentPolicyError, ImagePollTimeoutError, OpenAIBackendAPI,
-    UpstreamVerificationRequiredError,
-)
+from services.openai_backend_api import ImageContentPolicyError, ImagePollTimeoutError, OpenAIBackendAPI
 from utils.helper import (
     CODEX_IMAGE_MODEL_25,
     IMAGE_MODELS,
@@ -1479,13 +1476,6 @@ def _generate_bound_single_image(
                     exc.conversation_id = conversation_id
                     exc.parent_message_id = parent_message_id
                     raise
-                if isinstance(exc, UpstreamVerificationRequiredError):
-                    raise ImageGenerationError(
-                        str(exc), status_code=exc.status_code, code=exc.code,
-                        account_email=account_email, provider_binding_id=binding_id,
-                        provider_account_identity=account_identity,
-                        conversation_id=conversation_id, parent_message_id=parent_message_id,
-                    ) from exc
                 raise ImageGenerationError(
                     image_stream_error_message(str(exc)),
                     code="CONVERSATION_OUTCOME_UNKNOWN" if conversation_id else "CONVERSATION_BINDING_UNAVAILABLE",
@@ -1606,12 +1596,6 @@ def _generate_single_image(
                 return outputs
             account_service.mark_image_result(token, True)
             return outputs
-        except UpstreamVerificationRequiredError as exc:
-            account_service.mark_image_result(token, False)
-            raise ImageGenerationError(
-                str(exc), status_code=exc.status_code, code=exc.code,
-                account_email=account_email,
-            ) from exc
         except ImagePollTimeoutError as exc:
             account_service.mark_image_result(token, False)
             if account_email:
